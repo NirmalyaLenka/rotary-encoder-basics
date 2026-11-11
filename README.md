@@ -1,129 +1,108 @@
-# ESP32 Rotary Encoder Test
+# ESP32 Rotary Encoder Basics
 
-## Overview
+[![Platform](https://img.shields.io/badge/Platform-ESP32-00979D?logo=espressif&logoColor=white)](https://www.espressif.com/en/products/socs/esp32)
+[![Language](https://img.shields.io/badge/Language-Arduino%20C%2B%2B-00599C?logo=cplusplus&logoColor=white)](https://docs.arduino.cc/)
 
-This project reads rotation direction and button input from a KY-040 rotary encoder connected to an ESP32. It tracks a counter that increments clockwise and decrements counter-clockwise. Pressing the built-in button resets the counter to zero. All output is printed to the Serial Monitor.
+A minimal Arduino-framework example for reading a KY-040-style rotary encoder on an ESP32. The sketch polls the CLK and DT signals, updates a signed counter based on direction, and resets the counter when the encoder's push button is pressed. Events and the counter value are printed to the Serial Monitor.
 
----
+This is a learning and bench-test example. It is **not** an interrupt-driven or fully debounced encoder driver.
 
-## Hardware Required
+## Features
 
-- ESP32 development board
-- KY-040 rotary encoder module (or equivalent)
-- Jumper wires
-- USB cable for power and programming
+- Reads CLK and DT as digital inputs.
+- Increments or decrements a counter using a simple quadrature-direction check.
+- Uses the encoder push button to reset the counter to zero.
+- Reports direction, counter value and reset events over serial.
+- Uses a 5 ms polling delay and a 300 ms button debounce delay.
 
----
+## Hardware and bill of materials
 
-## Pin Connections
+| Item | Status | Notes |
+|---|---|---|
+| ESP32 development board | Required | Arduino-compatible ESP32 board with GPIO 25, 26 and 27 available. |
+| KY-040 rotary encoder module | Required for the documented wiring | Confirm the pin labels on the specific module. |
+| Jumper wires | Required | Share ground between module and ESP32. |
+| USB data cable | Required | For programming, power and serial output. |
+| External pull-ups | Conditional | The sketch does not enable internal pull-ups for CLK/DT. Use a module with onboard pull-ups or add suitable pull-ups to 3.3 V if needed. |
 
-| Encoder Pin | ESP32 Pin | Description            |
-|-------------|-----------|------------------------|
-| VCC         | 3.3V      | Power supply           |
-| GND         | GND       | Ground                 |
-| CLK         | GPIO 25   | Clock signal input     |
-| DT          | GPIO 26   | Data signal input      |
-| SW          | GPIO 27   | Push button input      |
+Power the encoder module from **3.3 V** for this wiring so its signal lines do not pull ESP32 GPIOs above their safe voltage. Do not connect 5 V logic to ESP32 pins.
 
-Note: The KY-040 module has onboard pull-up resistors for CLK and DT. The SW pin is handled with INPUT_PULLUP in code. Do not supply more than 3.3V to any pin.
+## Pin connections
 
----
+| KY-040 pin | ESP32 pin | Purpose |
+|---|---|---|
+| VCC / + | 3V3 | Module supply |
+| GND | GND | Common ground |
+| CLK | GPIO 25 | Clock signal |
+| DT | GPIO 26 | Direction/data signal |
+| SW | GPIO 27 | Active-low push button |
 
-## How It Works
+The source uses `INPUT` for CLK and DT and `INPUT_PULLUP` for SW. Therefore, CLK/DT need valid external or module-provided biasing; SW is expected to be pulled HIGH when idle and LOW when pressed.
 
-A rotary encoder outputs two square wave signals, CLK and DT, that are 90 degrees out of phase with each other. By comparing the state of CLK at the moment it changes to the current state of DT, the code can determine which direction the knob is being turned.
+## How the sketch works
 
-When CLK changes state and DT does not match CLK, the rotation is clockwise and the counter increments. When DT matches CLK, the rotation is counter-clockwise and the counter decrements.
+1. On startup, it configures the GPIOs and records the initial CLK state.
+2. In the main loop, it compares the current CLK state with the previous state.
+3. Whenever CLK changes, it samples DT to choose whether to increment or decrement the counter.
+4. It detects a HIGH-to-LOW transition on SW, resets the counter, prints a message and waits 300 ms.
+5. It waits another 5 ms before polling again.
 
-The button on the encoder is active LOW. When pressed, it pulls the SW pin to GND. The code detects a falling edge on SW and resets the counter to zero, with a 300ms debounce delay to prevent multiple triggers from a single press.
+### Important behavior and limitations
 
----
+- The current code reacts to **both rising and falling CLK transitions**. Depending on the encoder's detent/pulse pattern, a physical click may produce more than one counter update. The exact count-per-click has not been calibrated for a particular KY-040 module.
+- CLK/DT have no software debounce or full quadrature state validation. Contact bounce can create extra counts, and rapid rotation may be missed by polling.
+- The 300 ms button delay blocks encoder polling while it runs.
+- The sketch resets the counter but does not persist it across power cycles.
+- Direction labels may be reversed depending on encoder wiring and the module's mechanical orientation; swap CLK/DT or reverse the direction branch if required.
 
-## Direction Logic
+## Setup and upload
 
-| CLK Changed | DT != CLK | Direction         |
-|-------------|-----------|-------------------|
-| Yes         | Yes       | Clockwise         |
-| Yes         | No        | Counter-clockwise |
+1. Wire the module using the pin table and verify that its signal pins are safe for 3.3 V ESP32 logic.
+2. Install the Arduino IDE and ESP32 board support.
+3. Because Arduino sketches normally need a folder matching the `.ino` filename, place the source in a folder named `rotary_encoder_esp32/` containing `rotary_encoder_esp32.ino` before compiling.
+4. Open the sketch, select the exact ESP32 board under **Tools → Board**, and select its serial port under **Tools → Port**.
+5. Upload the sketch.
+6. Open **Serial Monitor** at **115200 baud**.
+7. Rotate the knob slowly in both directions, then press and release SW. Observe whether direction and count match the behavior expected from your module.
 
----
+## Example serial output
 
-## Setup Steps
+Output format varies with rotation and button presses. A typical sequence is:
 
-1. Wire the rotary encoder to the ESP32 as shown in the pin table.
-2. Open the Arduino IDE and make sure ESP32 board support is installed.
-3. Open the rotary_encoder_esp32.ino file.
-4. Select your ESP32 board from Tools > Board.
-5. Select the correct COM port from Tools > Port.
-6. Upload the sketch.
-7. Open Serial Monitor at 115200 baud.
-8. Rotate the knob and press the button to see output.
-
----
-
-## Expected Serial Output
-
-```
+```text
 Direction: CLOCKWISE
 Counter: 1
-Direction: CLOCKWISE
-Counter: 2
 Direction: COUNTER-CLOCKWISE
-Counter: 1
-Button Pressed! Counter Reset.
 Counter: 0
+Button Pressed! Counter Reset.
 ```
 
----
+The counter value shown is illustrative, not a hardware test result.
 
 ## Troubleshooting
 
-- If the counter jumps by more than one per click, reduce the delay at the bottom of the loop or add software debouncing on CLK and DT.
-- If the direction is always reported incorrectly, swap the CLK and DT pin connections or reverse the comparison logic in the code.
-- If the button does not register, confirm SW is connected to GPIO 27 and that INPUT_PULLUP is set in the code.
-- If no output appears at all, verify VCC is connected to 3.3V and GND is common between the encoder and ESP32.
+| Symptom | Checks |
+|---|---|
+| No serial output | Confirm the selected port, upload result and 115200 baud setting. |
+| Counter changes without touching the knob | Check common ground, CLK/DT wiring and pull-ups; contact bounce can cause extra transitions. |
+| Multiple counts per click | Expected with the current both-edge polling approach on some encoder variants. A falling-edge-only or full quadrature decoder may be needed for one count per detent. |
+| Direction is reversed | Swap CLK and DT or invert the direction decision after confirming wiring. |
+| Button does not reset the counter | Confirm SW is connected to GPIO 27 and is active LOW; check that the module ground is common with the ESP32. |
+| ESP32 resets or GPIOs appear damaged | Disconnect immediately and verify the module is not pulling signal pins to 5 V. |
 
----
+## Repository layout
 
-## Possible Projects
+```text
+.
+├── rotary_encoder_esp32.ino
+└── README.md
+```
 
-**Volume or Brightness Controller**
-Use the encoder knob to increase or decrease audio volume or screen brightness on a connected device. The counter value maps directly to a percentage. Pressing the button can mute or toggle the display on and off.
+There are no separate libraries, build scripts, CI workflows or automated tests in the repository tree. The sketch uses the Arduino core APIs and has no additional third-party library dependency.
 
-**OLED Menu System**
-Pair the encoder with an SSD1306 OLED display. Rotating the knob scrolls through menu items and pressing the button selects the highlighted option. This is a clean way to build a standalone device interface without a touchscreen.
+## License and maintenance
 
-**Stepper Motor Position Control**
-Each encoder tick moves a stepper motor one step in the corresponding direction. This gives precise manual control over a motor axis, useful for CNC positioning, focus adjustments on a camera rail, or tuning a mechanical fixture.
-
-**Digital Potentiometer**
-Replace a physical potentiometer in a circuit with the encoder plus ESP32. The counter value is mapped to a PWM output or sent over I2C to a digital potentiometer IC, giving smooth stepped control over voltage or resistance.
-
-**Settings Panel for IoT Device**
-Use the encoder to adjust parameters on a connected IoT device such as temperature setpoints, timer durations, or WiFi channel selection. Values are saved to EEPROM or NVS flash so they persist after power off.
-
-**Rotary Combination Lock**
-Build a combination lock using the encoder. The user must rotate to specific counter values in a set sequence. If the sequence matches, an output pin triggers a relay or servo to unlock a latch.
-
-**Frequency or Parameter Tuner**
-Feed the counter value into a formula to tune a frequency output on a DAC pin or a DDS module. Pressing the button can switch between coarse and fine tuning steps, making it easy to dial in precise values.
-
-**Scroll Wheel for Custom Keyboard**
-Register the ESP32 as a USB HID device using the TinyUSB library. Map encoder rotation to scroll up and scroll down events. Pressing the button can act as a middle-click, giving you a compact custom input device for a PC or Mac.
-
----
-
-## License
-
-This project is released for open use. No restrictions apply.
-
-
----
-
-## Maintenance & Audit
-
-- **Audit date:** 10 November 2026
-- **Documentation status:** README reviewed and audit record added on this date.
-- **Scope and evidence:** This entry records a documentation-level maintenance pass. It does not by itself establish that source code compiles, dependencies are current, security has been tested, or hardware/runtime behavior has been verified.
-- **Code and tests:** No new functional code changes or test results are claimed by this README update. Run the project-specific build, test, and hardware/runtime checks before relying on it.
-- **Maintenance baseline:** Documentation status recorded through 10 November 2026; revisit dependencies, setup instructions, known limitations, and tests whenever the project changes.
+- **License:** no `LICENSE` file is present, so reuse and redistribution permissions are not formally declared. Add a license file to state explicit terms.
+- **Verification:** source-level review only. Compilation and physical encoder behavior have not been verified for this maintenance pass.
+- **Last updated:** 11 November 2026 — documentation, wiring safety, setup and limitation notes reviewed.
+- **Maintenance:** if pins, polling logic, debounce behavior or count semantics change, update this guide and validate the result on the intended encoder module.
