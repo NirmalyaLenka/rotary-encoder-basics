@@ -106,3 +106,9 @@ There are no separate libraries, build scripts, CI workflows or automated tests 
 - **Verification:** source-level review only. Compilation and physical encoder behavior have not been verified for this maintenance pass.
 - **Last updated:** 11 November 2026 — documentation, wiring safety, setup and limitation notes reviewed.
 - **Maintenance:** if pins, polling logic, debounce behavior or count semantics change, update this guide and validate the result on the intended encoder module.
+
+## Contact
+
+Maintained up to 25 November 2026.
+
+If you encounter any problems, please contact [carmodbhai@gmail.com](mailto:carmodbhai@gmail.com).
